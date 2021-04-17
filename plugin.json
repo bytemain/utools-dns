@@ -1,0 +1,40 @@
+{
+  "pluginName": "切换 DNS",
+  "description": "切换DNS",
+  "author": "lengthmin",
+  "preload": "preload.js",
+  "version": "0.0.2",
+  "logo": "dns.png",
+  "features": [
+    {
+      "code": "redns",
+      "explain": "清除 DNS，还原默认 DNS",
+      "cmds": ["redns", "清除 DNS"]
+    },
+    {
+      "code": "gedns",
+      "explain": "获取当前 DNS",
+      "cmds": ["gedns", "getdns", "dns", "获取 DNS"]
+    },
+    {
+      "code": "updns",
+      "explain": "获取上游 DNS",
+      "cmds": ["updns", "上游 DNS"]
+    },
+    {
+      "code": "sedns",
+      "explain": "设置 DNS",
+      "cmds": [
+        "sedns",
+        "setdns",
+        {
+          "type": "regex",
+          "label": "输入自定义 dns",
+          "match": "/set?dns\\s?(\\d{1,3}.\\d{1,3}.\\d{1,3}.\\d{1,3})?/i",
+          "minLength": 1
+        }
+      ]
+    }
+  ],
+  "development": {}
+}
