@@ -1,10 +1,18 @@
 const cp = require('child_process');
 
-function getUpstreamDNS() {
-  return new Promise((resolve, reject) => {
+/**
+ * 获取上游 DNS
+ * @returns
+ */
+async function getUpstreamDNS() {
+  return new Promise((resolve, _) => {
     cp.exec(
       'ipconfig getpacket en0 | grep domain_name_server',
       (err, stdout, stderr) => {
+        if (err) {
+          utools.showNotification(`获取上游 DNS 错误：${err}，${stderr}`);
+          resolve([]);
+        }
         let data = stdout.toString();
         let start = data.indexOf('{');
         let end = data.indexOf('}');
@@ -20,13 +28,21 @@ function getUpstreamDNS() {
     );
   });
 }
-
+/**
+ * 设置 DNS
+ * @param {string}} dns
+ */
 function setDNS(dns) {
-  cp.exec(`networksetup -setdnsservers Wi-Fi ${dns}`, (err, stdout, stderr) => {
-    if (!err) {
-      utools.showNotification(`设置 DNS 成功：${dns}`);
-    }
-  });
+  cp.exec(
+    `networksetup -setdnsservers Wi-Fi ${dns}`,
+    (err, _stdout, stderr) => {
+      if (!err) {
+        utools.showNotification(`设置 DNS 成功：${dns}`);
+      } else {
+        utools.showNotification(`设置 DNS 错误：${err}，${stderr}`);
+      }
+    },
+  );
 }
 
 window.exports = {
@@ -35,18 +51,15 @@ window.exports = {
     args: {
       enter: (action) => {
         cp.exec(
-          'sudo networksetup -setdnsservers Wi-Fi empty',
+          'networksetup -setdnsservers Wi-Fi empty',
           (err, stdout, stderr) => {
             if (err) {
-              utools.showNotification(
-                err.toString() + '\n' + stdout + '\n' + stderr,
-              );
+              utools.showNotification(err.toString() + '\n' + stderr);
             } else {
               utools.showNotification('已经恢复上游 DNS');
             }
           },
         );
-
         window.utools.outPlugin();
       },
     },
@@ -121,9 +134,11 @@ window.exports = {
             })),
           );
         } else if (action.type === 'regex') {
+          // 解析 Regex
           let reg = /sedns\s?(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})?/;
           let result = action.payload.match(reg);
           if (result[1] !== undefined) {
+            // 保存历史
             setDNS(result[1]);
             let _put = {
               _id: 'dns_history',
@@ -146,6 +161,7 @@ window.exports = {
       },
       // 用户选择列表中某个条目时被调用
       select: (action, itemData, callbackSetList) => {
+        // 获取用户选中的条目 title，也就是我们要设置的 DNS
         let dns = itemData.title;
         setDNS(dns);
         window.utools.outPlugin();
