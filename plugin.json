@@ -1,9 +1,9 @@
 {
-  "pluginName": "切换 DNS",
-  "description": "切换DNS",
+  "pluginName": "DNS 切换 for MacOS",
+  "description": "快速切换DNS",
   "author": "lengthmin",
   "preload": "preload.js",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "logo": "dns.png",
   "features": [
     {
@@ -29,10 +29,11 @@
         "setdns",
         {
           "type": "regex",
-          "label": "输入自定义 dns",
-          "match": "/set?dns\\s?(\\d{1,3}.\\d{1,3}.\\d{1,3}.\\d{1,3})?/i",
+          "label": "设置输入的 DNS",
+          "match": "/set?dns\\s?(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})?/i",
           "minLength": 1
-        }
+        },
+        "设置 DNS"
       ]
     }
   ],

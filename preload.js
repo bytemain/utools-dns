@@ -1,4 +1,7 @@
 const cp = require('child_process');
+const net = require('net');
+
+const DNS_HISTORY_ID = 'dns_history';
 
 /**
  * 获取上游 DNS
@@ -21,7 +24,6 @@ async function getUpstreamDNS() {
           target.split(', ').map((v, idx) => ({
             title: v,
             description: idx,
-            icon: '', // 图标(可选)
           })),
         );
       },
@@ -30,19 +32,62 @@ async function getUpstreamDNS() {
 }
 /**
  * 设置 DNS
- * @param {string}} dns
+ * @param {string} dns
  */
 function setDNS(dns) {
-  cp.exec(
-    `networksetup -setdnsservers Wi-Fi ${dns}`,
-    (err, _stdout, stderr) => {
-      if (!err) {
-        utools.showNotification(`设置 DNS 成功：${dns}`);
-      } else {
-        utools.showNotification(`设置 DNS 错误：${err}，${stderr}`);
+  if (net.isIPv4(dns)) {
+    cp.exec(
+      `networksetup -setdnsservers Wi-Fi ${dns}`,
+      (err, _stdout, stderr) => {
+        if (!err) {
+          utools.showNotification(`设置 DNS 成功：${dns}`);
+        } else {
+          utools.showNotification(`设置 DNS 错误：${err}，${stderr}`);
+        }
+      },
+    );
+  } else {
+    utools.showNotification(dns + ' 不是有效的 IPV4 地址');
+  }
+}
+
+function getHistoryDNS() {
+  const { data } = utools.db.get(DNS_HISTORY_ID);
+  let list = [];
+  if (data) {
+    list = JSON.parse(data);
+  }
+  return list.map((v, idx) => ({
+    title: v,
+    description: idx,
+  }));
+}
+
+/**
+ * 保存历史
+ * @param {string}} dns
+ */
+function addHistoryDNS(dns) {
+  let _put = {
+    _id: DNS_HISTORY_ID,
+  };
+  const history = utools.db.get(DNS_HISTORY_ID);
+  if (history) {
+    const { data, _rev } = history;
+    _result = JSON.parse(data);
+    for (let i = 0; i < _result.length; i++) {
+      const element = _result[i];
+      if (dns === element) {
+        _result.splice(i, 1);
       }
-    },
-  );
+    }
+    _result.unshift(dns);
+    _put.data = JSON.stringify(_result);
+    _put._rev = _rev;
+  } else {
+    _put.data = JSON.stringify([dns]);
+  }
+  utools.db.put(_put);
 }
 
 window.exports = {
@@ -83,7 +128,6 @@ window.exports = {
               .map((v, idx) => ({
                 title: v,
                 description: idx,
-                icon: '', // 图标(可选)
               }));
             utools.setSubInput(({ text }) => {
               console.log(text);
@@ -92,25 +136,15 @@ window.exports = {
           }
         });
       },
-      // 用户选择列表中某个条目时被调用
-      select: (action, itemData, callbackSetList) => {
-        window.utools.outPlugin();
-      },
     },
   },
   updns: {
     mode: 'list',
     args: {
       enter: async (action, callbackSetList) => {
-        const list = await getUpstreamDNS();
-        callbackSetList(list);
+        callbackSetList(await getUpstreamDNS());
       },
-      // 用户选择列表中某个条目时被调用
-      select: (action, itemData, callbackSetList) => {
-        window.utools.outPlugin();
-      },
-      // 子输入框为空时的占位符，默认为字符串"搜索"
-      placeholder: '上游 DNS',
+      placeholder: '路由器分配的 DNS',
     },
   },
   sedns: {
@@ -118,56 +152,44 @@ window.exports = {
     args: {
       enter: (action, callbackSetList) => {
         if (action.type === 'text') {
-          utools.setSubInput(({ text }) => {
-            console.log(text);
-          }, '历史记录');
-          const { data } = utools.db.get('dns_history');
-          let list = [];
-          if (data) {
-            list = JSON.parse(data);
-          }
-          callbackSetList(
-            list.map((v, idx) => ({
-              title: v,
-              description: idx,
-              icon: '', // 图标(可选)
-            })),
-          );
-        } else if (action.type === 'regex') {
+          const list = getHistoryDNS();
+          callbackSetList(list);
+          return;
+        }
+        if (action.type === 'regex') {
           // 解析 Regex
-          let reg = /sedns\s?(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})?/;
-          let result = action.payload.match(reg);
+          let result = net.isIPv4(action.payload);
           if (result[1] !== undefined) {
-            // 保存历史
             setDNS(result[1]);
-            let _put = {
-              _id: 'dns_history',
-            };
-            const history = utools.db.get('dns_history');
-            if (history) {
-              const { data, _rev } = history;
-              _result = JSON.parse(data);
-              _result.push(result[1]);
-              _put.data = JSON.stringify(_result);
-              _put._rev = _rev;
-            } else {
-              _put.data = JSON.stringify([result[1]]);
-            }
-
-            utools.db.put(_put);
+            addHistoryDNS(result[1]);
             window.utools.outPlugin();
           }
         }
       },
-      // 用户选择列表中某个条目时被调用
       select: (action, itemData, callbackSetList) => {
         // 获取用户选中的条目 title，也就是我们要设置的 DNS
-        let dns = itemData.title;
-        setDNS(dns);
+        setDNS(itemData.title);
+        addHistoryDNS(itemData.title);
         window.utools.outPlugin();
       },
-      // 子输入框为空时的占位符，默认为字符串"搜索"
-      placeholder: '历史记录',
+      search: (action, searchWord, callbackSetList) => {
+        if (!searchWord) {
+          const list = getHistoryDNS();
+          callbackSetList(list);
+          return;
+        }
+        let description = '回车确认设置当前 DNS';
+        if (!net.isIPv4(searchWord)) {
+          description = '!! DNS 格式错误 !!';
+        }
+        callbackSetList([
+          {
+            title: searchWord,
+            description,
+          },
+        ]);
+      },
+      placeholder: '选择历史记录，或者直接输入 DNS',
     },
   },
 };
