@@ -1,5 +1,7 @@
 # DNS 切换 for MacOS
 
+[GitHub 地址](https://github.com/lengthmin/utools-dns)
+
 一个修改 DNS 的 uTools 插件
 
 ![demo](https://cdn.jsdelivr.net/gh/riril/i@master/images/1619010171108-1619010171103.png)
