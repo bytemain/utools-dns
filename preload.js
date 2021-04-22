@@ -47,20 +47,27 @@ function setDNS(dns) {
       },
     );
   } else {
-    utools.showNotification(dns + ' 不是有效的 IPV4 地址');
+    utools.showNotification(`"${dns}" 不是有效的 IPV4 地址`);
   }
 }
 
-function getHistoryDNS() {
-  const { data } = utools.db.get(DNS_HISTORY_ID);
+async function getHistoryDNS() {
+  const db = utools.db.get(DNS_HISTORY_ID);
   let list = [];
-  if (data) {
-    list = JSON.parse(data);
+  if (db) {
+    list = JSON.parse(db.data);
+    return list.map((v, idx) => ({
+      title: v,
+      description: idx,
+    }));
+  } else {
+    return [
+      {
+        title: '无',
+        description: '!!没有历史记录，请输入你要设置的 DNS',
+      },
+    ];
   }
-  return list.map((v, idx) => ({
-    title: v,
-    description: idx,
-  }));
 }
 
 /**
@@ -150,9 +157,9 @@ window.exports = {
   sedns: {
     mode: 'list',
     args: {
-      enter: (action, callbackSetList) => {
+      enter: async (action, callbackSetList) => {
         if (action.type === 'text') {
-          const list = getHistoryDNS();
+          const list = await getHistoryDNS();
           callbackSetList(list);
           return;
         }
@@ -172,9 +179,9 @@ window.exports = {
         addHistoryDNS(itemData.title);
         window.utools.outPlugin();
       },
-      search: (action, searchWord, callbackSetList) => {
+      search: async (action, searchWord, callbackSetList) => {
         if (!searchWord) {
-          const list = getHistoryDNS();
+          const list = await getHistoryDNS();
           callbackSetList(list);
           return;
         }
