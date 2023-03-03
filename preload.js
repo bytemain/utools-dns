@@ -1,53 +1,27 @@
 const cp = require('child_process');
 const net = require('net');
+const { promisify } = require('util');
+
+const utils = require('./utils');
+const dns = require('./dns');
 
 const DNS_HISTORY_ID = 'dns_history';
 
 /**
- * 获取上游 DNS
- * @returns
- */
-async function getUpstreamDNS() {
-  return new Promise((resolve, _) => {
-    cp.exec(
-      'ipconfig getpacket en0 | grep domain_name_server',
-      (err, stdout, stderr) => {
-        if (err) {
-          utools.showNotification(`获取上游 DNS 错误：${err}，${stderr}`);
-          resolve([]);
-        }
-        let data = stdout.toString();
-        let start = data.indexOf('{');
-        let end = data.indexOf('}');
-        let target = data.slice(start + 1, end);
-        resolve(
-          target.split(', ').map((v, idx) => ({
-            title: v,
-            description: idx,
-          })),
-        );
-      },
-    );
-  });
-}
-/**
  * 设置 DNS
- * @param {string} dns
+ * @param {string} dnsStr
  */
-function setDNS(dns) {
-  if (net.isIPv4(dns)) {
-    cp.exec(
-      `networksetup -setdnsservers Wi-Fi ${dns}`,
-      (err, _stdout, stderr) => {
-        if (!err) {
-          utools.showNotification(`设置 DNS 成功：${dns}`);
-        } else {
-          utools.showNotification(`设置 DNS 错误：${err}，${stderr}`);
-        }
-      },
-    );
+async function setDNS(dnsStr) {
+  if (net.isIPv4(dnsStr)) {
+    await dns.setDNSInfo(dnsStr);
+    const result = await utils.getUsedNetworkInterfaces();
+    result.forEach((v) => {
+      utools.showNotification(
+        `[${v.name} ${v.hardwarePort}] 设置 DNS 成功：${dnsStr}`
+      );
+    });
   } else {
-    utools.showNotification(`"${dns}" 不是有效的 IPV4 地址`);
+    utools.showNotification(`"${dnsStr}" 不是有效的 IPV4 地址`);
   }
 }
 
@@ -101,17 +75,9 @@ window.exports = {
   redns: {
     mode: 'none',
     args: {
-      enter: (action) => {
-        cp.exec(
-          'networksetup -setdnsservers Wi-Fi empty',
-          (err, stdout, stderr) => {
-            if (err) {
-              utools.showNotification(err.toString() + '\n' + stderr);
-            } else {
-              utools.showNotification('已经恢复上游 DNS');
-            }
-          },
-        );
+      enter: async (action) => {
+        await dns.clearDNS();
+        utools.showNotification('已经恢复上游 DNS');
         window.utools.outPlugin();
       },
     },
@@ -120,28 +86,12 @@ window.exports = {
     mode: 'list', // 列表模式
     args: {
       enter: async (action, callbackSetList) => {
-        cp.exec('networksetup -getdnsservers Wi-Fi', (err, stdout, stderr) => {
-          if (stdout.trim() === "There aren't any DNS Servers set on Wi-Fi.") {
-            getUpstreamDNS().then((v) => {
-              utools.setSubInput(({ text }) => {
-                console.log(text);
-              }, '没有自定义 DNS，展示上游 DNS');
-              callbackSetList(v);
-            });
-          } else {
-            let list = stdout
-              .trim()
-              .split('\n')
-              .map((v, idx) => ({
-                title: v,
-                description: idx,
-              }));
-            utools.setSubInput(({ text }) => {
-              console.log(text);
-            }, '当前 DNS');
-            callbackSetList(list);
-          }
+        const list = await dns.getAllDNSInfos();
+        const result = [];
+        list.forEach((v) => {
+          result.push(v.data);
         });
+        callbackSetList(result.flat());
       },
     },
   },
@@ -149,7 +99,8 @@ window.exports = {
     mode: 'list',
     args: {
       enter: async (action, callbackSetList) => {
-        callbackSetList(await getUpstreamDNS());
+        const data = await dns.getAllUpstreamDNS();
+        callbackSetList(data);
       },
       placeholder: '路由器分配的 DNS',
     },

@@ -1,7 +1,14 @@
 {
-  "dependencies": {},
   "name": "utools-dns",
   "version": "1.0.0",
   "main": "index.js",
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "test": "jest"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/jest": "^29.4.0",
+    "jest": "^29.4.3"
+  }
 }
