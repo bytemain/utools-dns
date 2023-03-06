@@ -1,13 +1,70 @@
 const net = require('net');
 
-const utils = require('./utils');
+const { networkInterfaces } = require('os');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const _execAsync = promisify(exec);
+
+async function execAsync(cmd) {
+  console.log('[command]', cmd);
+  return await _execAsync(cmd);
+}
+
+function getValidateNetworkInterfaces() {
+  const interfaces = networkInterfaces();
+  return Object.keys(interfaces)
+    .map((name) => ({
+      name,
+      addresses: interfaces[name]
+        .filter((v) => v.family === 'IPv4' && !v.internal)
+        .map((iface) => ({
+          address: iface.address,
+          netmask: iface.netmask,
+          family: iface.family,
+          mac: iface.mac,
+          internal: iface.internal,
+        })),
+    }))
+    .filter((v) => v.addresses.length > 0);
+}
+
+async function getAllNetworkInterfaces() {
+  const output = (await execAsync('networksetup -listallhardwareports')).stdout;
+
+  const interfaceLines = output.trim().split('\n').filter(Boolean);
+
+  return interfaceLines
+    .map((line, index) => {
+      if (line.includes('Device:')) {
+        const name = line.split('Device:')[1].trim();
+        const nextLine = interfaceLines[index + 1];
+        const mac = nextLine.includes('Ethernet Address:')
+          ? nextLine.split('Ethernet Address:')[1].trim()
+          : null;
+        const preLine = interfaceLines[index - 1];
+        const hardwarePort = preLine.includes('Hardware Port:')
+          ? preLine.split('Hardware Port:')[1].trim()
+          : null;
+        return { name, mac, hardwarePort };
+      }
+
+      return null;
+    })
+    .filter((iface) => iface !== null);
+}
+
+async function getUsedNetworkInterfaces() {
+  const all = await getAllNetworkInterfaces();
+  const valid = getValidateNetworkInterfaces().map((v) => v.name);
+  return all.filter((iface) => valid.includes(iface.name));
+}
 
 /**
  * 获取上游 DNS
  * @returns {string[]}
  */
 async function getUpstreamDNS(enName) {
-  const { stdout } = await utils.execAsync(
+  const { stdout } = await execAsync(
     `ipconfig getpacket ${enName} | grep domain_name_server`
   );
 
@@ -20,7 +77,7 @@ async function getUpstreamDNS(enName) {
 }
 
 async function getAllUpstreamDNS() {
-  const ifaces = await utils.getUsedNetworkInterfaces();
+  const ifaces = await getUsedNetworkInterfaces();
   const result = [];
   await Promise.all(
     ifaces.map(async (v) => {
@@ -35,7 +92,7 @@ async function getAllUpstreamDNS() {
 }
 
 async function getAllDNSInfos() {
-  const ifaces = await utils.getUsedNetworkInterfaces();
+  const ifaces = await getUsedNetworkInterfaces();
   const result = {};
   ifaces.forEach((v) => {
     result[v.name] = {
@@ -47,7 +104,7 @@ async function getAllDNSInfos() {
   await Promise.all(
     ifaces.map(async (v) => {
       result[v.name]['port'] = v.hardwarePort;
-      const { stdout } = await utils.execAsync(
+      const { stdout } = await execAsync(
         `networksetup -getdnsservers "${v.hardwarePort}"`
       );
       if (stdout.trim().includes("There aren't any DNS Servers set")) {
@@ -84,10 +141,10 @@ function desc(prefix, str, idx, name, hardwarePort) {
 }
 async function setDNSInfo(dns) {
   if (net.isIPv4(dns)) {
-    const result = await utils.getUsedNetworkInterfaces();
+    const result = await getUsedNetworkInterfaces();
     return Promise.all(
       result.map((v) => {
-        return utils.execAsync(
+        return execAsync(
           `networksetup -setdnsservers "${v.hardwarePort}" ${dns}`
         );
       })
@@ -97,10 +154,10 @@ async function setDNSInfo(dns) {
 }
 
 async function clearDNS() {
-  const result = await utils.getUsedNetworkInterfaces();
+  const result = await getUsedNetworkInterfaces();
   return Promise.all(
     result.map(async (v) => {
-      return await utils.execAsync(
+      return await execAsync(
         `networksetup -setdnsservers "${v.hardwarePort}" empty`
       );
     })

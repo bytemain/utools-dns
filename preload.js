@@ -1,8 +1,5 @@
-const cp = require('child_process');
 const net = require('net');
-const { promisify } = require('util');
 
-const utils = require('./utils');
 const dns = require('./dns');
 
 const DNS_HISTORY_ID = 'dns_history';
@@ -14,7 +11,7 @@ const DNS_HISTORY_ID = 'dns_history';
 async function setDNS(dnsStr) {
   if (net.isIPv4(dnsStr)) {
     await dns.setDNSInfo(dnsStr);
-    const result = await utils.getUsedNetworkInterfaces();
+    const result = await dns.getUsedNetworkInterfaces();
     result.forEach((v) => {
       utools.showNotification(
         `[${v.name} ${v.hardwarePort}] 设置 DNS 成功：${dnsStr}`
